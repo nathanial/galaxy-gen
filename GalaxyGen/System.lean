@@ -1,0 +1,21 @@
+/-
+  GalaxyGen.System
+  Star system composition.
+-/
+
+import Linalg
+import GalaxyGen.Star
+import GalaxyGen.Planet
+
+namespace GalaxyGen
+
+/-- A generated star system. -/
+structure StarSystem where
+  id : Nat
+  name : String
+  position : Linalg.Vec3
+  star : Star
+  planets : Array Planet
+  deriving Repr, BEq, Inhabited
+
+end GalaxyGen
