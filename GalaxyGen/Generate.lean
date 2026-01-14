@@ -8,11 +8,13 @@ import Linalg
 import GalaxyGen.Config
 import GalaxyGen.Rng
 import GalaxyGen.NameGen
+import GalaxyGen.Shape
 import GalaxyGen.Orbit
 import GalaxyGen.Star
 import GalaxyGen.Planet
 import GalaxyGen.System
 import GalaxyGen.Galaxy
+import GalaxyGen.Regions
 
 namespace GalaxyGen
 
@@ -27,11 +29,21 @@ private def randomPointInDisc (radius thickness : Float) : Gen Vec3 := do
   let z ← Gen.nextFloatRange (-thickness / 2.0) (thickness / 2.0)
   return Vec3.mk x y z
 
+private def samplePointByDensity (config : GalaxyConfig) (attempts : Nat) : Gen Vec3 := do
+  let candidate ← randomPointInDisc config.radius config.thickness
+  let density := GalaxyShape.densityAt config.shape config.radius config.thickness candidate
+  let pick ← Gen.nextFloat
+  if pick <= density then
+    return candidate
+  match attempts with
+  | 0 => return candidate
+  | n + 1 => samplePointByDensity config n
+
 private def isFarEnough (positions : Array Vec3) (candidate : Vec3) (minDistSq : Float) : Bool :=
   positions.all (fun pos => Vec3.distanceSquared pos candidate >= minDistSq)
 
 private def findPosition (positions : Array Vec3) (config : GalaxyConfig) (attempts : Nat) : Gen Vec3 := do
-  let candidate ← randomPointInDisc config.radius config.thickness
+  let candidate ← samplePointByDensity config config.densityAttempts
   if isFarEnough positions candidate (config.minSpacing * config.minSpacing) then
     return candidate
   match attempts with
@@ -120,12 +132,14 @@ private def generateSystem (id : Nat) (position : Vec3) (config : GalaxyConfig) 
   let star ← generateStar name
   let planetCount ← Gen.nextNatRange config.minPlanets config.maxPlanets
   let planets ← generatePlanets star planetCount config
+  let tags := Regions.tagsAt config.shape config.radius config.thickness position
   return {
     id := id,
     name := name,
     position := position,
     star := star,
-    planets := planets
+    planets := planets,
+    tags := tags
   }
 
 private def nearestNeighbors (systems : Array StarSystem) (index : Nat) (k : Nat) : Array Nat :=
@@ -143,16 +157,50 @@ private def nearestNeighbors (systems : Array StarSystem) (index : Nat) (k : Nat
       let picked := sorted.toList.take k
       return picked.toArray.map (fun item => item.1)
 
-private def generateHyperlanes (systems : Array StarSystem) (neighbors : Nat) : Array Hyperlane := Id.run do
+private def nearestNeighborsFiltered (systems : Array StarSystem) (index : Nat) (k : Nat)
+    (keep : Nat → Bool) : Array Nat :=
+  if k == 0 then
+    #[]
+  else
+    Id.run do
+      let origin := systems[index]!.position
+      let mut distances : Array (Nat × Float) := #[]
+      for j in [0:systems.size] do
+        if j != index && keep j then
+          let dist := Vec3.distanceSquared origin systems[j]!.position
+          distances := distances.push (j, dist)
+      let sorted := distances.qsort (fun a b => a.2 < b.2)
+      let picked := sorted.toList.take k
+      return picked.toArray.map (fun item => item.1)
+
+private def generateHyperlanes (systems : Array StarSystem) (config : GalaxyConfig) : Array Hyperlane := Id.run do
+  let neighbors := config.hyperlaneNeighbors
   if systems.size <= 1 || neighbors == 0 then
     return #[]
   let neighborCount := Nat.min neighbors (systems.size - 1)
   let mut edges : Std.HashSet Hyperlane := {}
+  let isSpiral := match config.shape.kind with
+    | .spiral => true
+    | .barredSpiral => true
+    | _ => false
   for i in [0:systems.size] do
-    let nearest := nearestNeighbors systems i neighborCount
-    for j in nearest do
-      if i != j then
+    if isSpiral then
+      let armIndex := GalaxyShape.armIndexAt config.shape config.radius systems[i]!.position
+      let sameArm := nearestNeighborsFiltered systems i neighborCount (fun j =>
+        GalaxyShape.armIndexAt config.shape config.radius systems[j]!.position == armIndex
+      )
+      let crossArm := nearestNeighborsFiltered systems i config.shape.armCrossLinks (fun j =>
+        GalaxyShape.armIndexAt config.shape config.radius systems[j]!.position != armIndex
+      )
+      for j in sameArm do
         edges := edges.insert (Hyperlane.ordered i j)
+      for j in crossArm do
+        edges := edges.insert (Hyperlane.ordered i j)
+    else
+      let nearest := nearestNeighbors systems i neighborCount
+      for j in nearest do
+        if i != j then
+          edges := edges.insert (Hyperlane.ordered i j)
   return edges.toList.toArray
 
 /-- Generate a galaxy using the generator monad. -/
@@ -162,7 +210,7 @@ def generateGalaxyM (config : GalaxyConfig) : Gen Galaxy := do
   for i in [0:positions.size] do
     let system ← generateSystem i positions[i]! config
     systems := systems.push system
-  let hyperlanes := generateHyperlanes systems config.hyperlaneNeighbors
+  let hyperlanes := generateHyperlanes systems config
   return { systems := systems, hyperlanes := hyperlanes }
 
 /-- Generate a galaxy from a config using the embedded seed. -/

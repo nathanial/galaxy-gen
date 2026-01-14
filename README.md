@@ -30,6 +30,38 @@ let galaxy := generateGalaxy config
 IO.println s!"systems: {galaxy.systems.size}, lanes: {galaxy.hyperlanes.size}"
 ```
 
+## Shape Presets
+
+```lean
+import GalaxyGen
+
+open GalaxyGen
+
+let shape := Presets.barred
+let config := ({} : GalaxyConfig) |> GalaxyConfig.withShape shape
+let galaxy := generateGalaxy config
+```
+
+## TOML Loading
+
+```toml
+seed = 123
+systemCount = 200
+
+[shape]
+preset = "spiral4"
+armCount = 4
+```
+
+```lean
+import GalaxyGen
+
+open GalaxyGen
+
+def load : IO (Except String GalaxyConfig) :=
+  Toml.loadConfig "galaxy.toml"
+```
+
 ## Tests
 
 ```bash

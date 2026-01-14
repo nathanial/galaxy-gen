@@ -1,6 +1,10 @@
 import GalaxyGen.Config
 import GalaxyGen.Rng
 import GalaxyGen.NameGen
+import GalaxyGen.Shape
+import GalaxyGen.Presets
+import GalaxyGen.Regions
+import GalaxyGen.Toml
 import GalaxyGen.Orbit
 import GalaxyGen.Star
 import GalaxyGen.Planet

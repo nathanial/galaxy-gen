@@ -6,6 +6,7 @@ package galaxyGen where
 
 require linalg from git "https://github.com/nathanial/linalg" @ "v0.0.2"
 require crucible from git "https://github.com/nathanial/crucible" @ "v0.0.7"
+require totem from "../totem"
 
 @[default_target]
 lean_lib GalaxyGen where

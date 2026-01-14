@@ -6,6 +6,7 @@
 import Linalg
 import GalaxyGen.Star
 import GalaxyGen.Planet
+import GalaxyGen.Regions
 
 namespace GalaxyGen
 
@@ -16,6 +17,7 @@ structure StarSystem where
   position : Linalg.Vec3
   star : Star
   planets : Array Planet
+  tags : Array RegionTag
   deriving Repr, BEq, Inhabited
 
 end GalaxyGen
